@@ -461,7 +461,11 @@ export default function AllowancesPage() {
                 <SelectTrigger>
                   <SelectValue placeholder="Select employee..." />
                 </SelectTrigger>
-                <SelectContent position="popper">
+                <SelectContent
+                  position="popper"
+                  sideOffset={4}
+                  className="max-h-[200px] overflow-y-auto"
+                >
                   {employees.map((e) => (
                     <SelectItem key={e.EmployeeID} value={String(e.EmployeeID)}>
                       {e.FullName} ({e.EPF_No})
