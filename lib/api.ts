@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ;
+const API_BASE = process.env.NEXT_PUBLIC_API_URL;
 
 const api = axios.create({
   baseURL: API_BASE,
@@ -94,12 +94,149 @@ export const salarySlipApi = {
   downloadPdf: (id: number) => api.get(`/SalarySlip/${id}/pdf`, { responseType: 'blob' }),
 };
 
+// ─── Helper to trigger file download from blob response ───────────────────────
+export const downloadFile = (blobData: Blob, filename: string) => {
+  const url = URL.createObjectURL(blobData);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
 export const reportApi = {
-  payrollSummary: (periodId: number) => api.get(`/Report/payroll-summary/${periodId}`),
-  epfReport: (periodId: number) => api.get(`/Report/epf/${periodId}`),
-  bankTransfer: (periodId: number) => api.get(`/Report/bank-transfer/${periodId}`),
-  employeeHistory: (empId: number) => api.get(`/Report/employee-history/${empId}`),
-  payeReport: (periodId: number) => api.get(`/Report/paye/${periodId}`),
+  // ── Legacy endpoints (kept for compatibility) ──────────────────────────────
+  payrollSummary: (periodId: number) =>
+    api.get(`/reports/payroll-summary/${periodId}`),
+  epfReport: (periodId: number) =>
+    api.get(`/reports/epf/${periodId}`),
+  bankTransfer: (periodId: number) =>
+    api.get(`/reports/bank-transfer/${periodId}`),
+  employeeHistory: (empId: number) =>
+    api.get(`/reports/employee-history/${empId}`),
+  payeReport: (periodId: number) =>
+    api.get(`/reports/paye/${periodId}`),
+
+  // ── Report 1: Department-Wise Salary ──────────────────────────────────────
+  departmentWiseSalary: (companyId: number, periodId: number, departmentId?: number) =>
+    api.get('/reports/department-wise-salary', { params: { companyId, periodId, departmentId } }),
+  departmentWiseSalaryExcel: (companyId: number, periodId: number, departmentId?: number) =>
+    api.get('/reports/department-wise-salary/excel', {
+      params: { companyId, periodId, departmentId },
+      responseType: 'blob',
+    }),
+  departmentWiseSalaryPdf: (companyId: number, periodId: number, departmentId?: number) =>
+    api.get('/reports/department-wise-salary/pdf', {
+      params: { companyId, periodId, departmentId },
+      responseType: 'blob',
+    }),
+
+  // ── Report 2: Department Salary Summary ───────────────────────────────────
+  departmentSalarySummary: (companyId: number, periodId: number) =>
+    api.get('/reports/department-salary-summary', { params: { companyId, periodId } }),
+  departmentSalarySummaryExcel: (companyId: number, periodId: number) =>
+    api.get('/reports/department-salary-summary/excel', {
+      params: { companyId, periodId },
+      responseType: 'blob',
+    }),
+  departmentSalarySummaryPdf: (companyId: number, periodId: number) =>
+    api.get('/reports/department-salary-summary/pdf', {
+      params: { companyId, periodId },
+      responseType: 'blob',
+    }),
+
+  // ── Report 3.1: EPF Contributions ─────────────────────────────────────────
+  epfContributions: (companyId: number, periodId: number, departmentId?: number) =>
+    api.get('/reports/epf-contributions', { params: { companyId, periodId, departmentId } }),
+  epfContributionsExcel: (companyId: number, periodId: number, departmentId?: number) =>
+    api.get('/reports/epf-contributions/excel', {
+      params: { companyId, periodId, departmentId },
+      responseType: 'blob',
+    }),
+  epfContributionsPdf: (companyId: number, periodId: number, departmentId?: number) =>
+    api.get('/reports/epf-contributions/pdf', {
+      params: { companyId, periodId, departmentId },
+      responseType: 'blob',
+    }),
+
+  // ── Report 3.2: ETF Contributions ─────────────────────────────────────────
+  etfContributions: (companyId: number, periodId: number, departmentId?: number) =>
+    api.get('/reports/etf-contributions', { params: { companyId, periodId, departmentId } }),
+  etfContributionsExcel: (companyId: number, periodId: number, departmentId?: number) =>
+    api.get('/reports/etf-contributions/excel', {
+      params: { companyId, periodId, departmentId },
+      responseType: 'blob',
+    }),
+  etfContributionsPdf: (companyId: number, periodId: number, departmentId?: number) =>
+    api.get('/reports/etf-contributions/pdf', {
+      params: { companyId, periodId, departmentId },
+      responseType: 'blob',
+    }),
+
+  // ── Report 3.3: MSPS Contributions ────────────────────────────────────────
+  mspsContributions: (companyId: number, periodId: number, departmentId?: number) =>
+    api.get('/reports/msps-contributions', { params: { companyId, periodId, departmentId } }),
+  mspsContributionsExcel: (companyId: number, periodId: number, departmentId?: number) =>
+    api.get('/reports/msps-contributions/excel', {
+      params: { companyId, periodId, departmentId },
+      responseType: 'blob',
+    }),
+  mspsContributionsPdf: (companyId: number, periodId: number, departmentId?: number) =>
+    api.get('/reports/msps-contributions/pdf', {
+      params: { companyId, periodId, departmentId },
+      responseType: 'blob',
+    }),
+
+  // ── Report 4: Monthly Department Cost (year-based pivot) ──────────────────
+  monthlyDepartmentCost: (companyId: number, year: number) =>
+    api.get('/reports/monthly-department-cost', { params: { companyId, year } }),
+  monthlyDepartmentCostExcel: (companyId: number, year: number) =>
+    api.get('/reports/monthly-department-cost/excel', {
+      params: { companyId, year },
+      responseType: 'blob',
+    }),
+  monthlyDepartmentCostPdf: (companyId: number, year: number) =>
+    api.get('/reports/monthly-department-cost/pdf', {
+      params: { companyId, year },
+      responseType: 'blob',
+    }),
+
+  // ── Report 5: PAYE Tax ────────────────────────────────────────────────────
+  payeTax: (companyId: number, periodId: number) =>
+    api.get('/reports/paye-tax', { params: { companyId, periodId } }),
+  payeTaxExcel: (companyId: number, periodId: number) =>
+    api.get('/reports/paye-tax/excel', {
+      params: { companyId, periodId },
+      responseType: 'blob',
+    }),
+  payeTaxPdf: (companyId: number, periodId: number) =>
+    api.get('/reports/paye-tax/pdf', {
+      params: { companyId, periodId },
+      responseType: 'blob',
+    }),
+
+  // ── Report 6: Payroll Full Detailed (PDF only) ────────────────────────────
+  payrollFullDetailed: (companyId: number, periodId: number, departmentId?: number) =>
+    api.get('/reports/payroll-full-detailed', { params: { companyId, periodId, departmentId } }),
+  payrollFullDetailedPdf: (companyId: number, periodId: number, departmentId?: number) =>
+    api.get('/reports/payroll-full-detailed/pdf', {
+      params: { companyId, periodId, departmentId },
+      responseType: 'blob',
+    }),
+
+  // ── Report 7: Payroll Summary Report ──────────────────────────────────────
+  payrollSummaryReport: (periodId: number, companyId?: number) =>
+    api.get('/reports/payroll-summary-report', { params: { companyId, periodId } }),
+  payrollSummaryReportExcel: (periodId: number, companyId?: number) =>
+    api.get('/reports/payroll-summary-report/excel', {
+      params: { companyId, periodId },
+      responseType: 'blob',
+    }),
+  payrollSummaryReportPdf: (periodId: number, companyId?: number) =>
+    api.get('/reports/payroll-summary-report/pdf', {
+      params: { companyId, periodId },
+      responseType: 'blob',
+    }),
 };
 
 export default api;
