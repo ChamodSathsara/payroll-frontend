@@ -2,12 +2,7 @@
 import { useEffect, useState } from "react";
 import { allowanceApi, employeeApi } from "@/lib/api";
 import toast from "react-hot-toast";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
+import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -39,24 +34,25 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Edit, Trash2 } from "lucide-react";
-import { fmt } from "@/lib/utils";
 
 export default function AllowancesPage() {
   const [types, setTypes] = useState<any[]>([]);
   const [allowances, setAllowances] = useState<any[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
-  const [modal, setModal] = useState<"type" | "editType" | "allowance" | null>(
-    null,
-  );
+  const [modal, setModal] = useState<
+    "type" | "editType" | "allowance" | "editAllowance" | null
+  >(null);
   const [selected, setSelected] = useState<any>(null);
   const [saving, setSaving] = useState(false);
+
   const [typeForm, setTypeForm] = useState({
     Type_Name: "",
     Category: "FIXED",
     Description: "",
     Is_Active: "1",
   });
+
   const [allowForm, setAllowForm] = useState({
     EmployeeID: "",
     AllowanceType_ID: "",
@@ -66,6 +62,16 @@ export default function AllowancesPage() {
     End_Date: "",
     Is_Active: 1,
     Created_by: 1,
+  });
+
+  // Update form mirrors AllowanceUpdateDto
+  const [editAllowForm, setEditAllowForm] = useState({
+    Method_ID: "",
+    Value: "",
+    Remark: "",
+    Start_Date: "",
+    End_Date: "",
+    Is_Active: "1",
   });
 
   const load = async () => {
@@ -138,6 +144,47 @@ export default function AllowancesPage() {
     setSaving(false);
   };
 
+  // Build the patch payload — only include fields that have values
+  const updateAllowance = async () => {
+    if (!selected) return;
+    setSaving(true);
+    try {
+      const payload: Record<string, any> = {};
+      if (editAllowForm.Method_ID !== "")
+        payload.Method_ID = parseInt(editAllowForm.Method_ID);
+      if (editAllowForm.Value !== "")
+        payload.Value = parseFloat(editAllowForm.Value);
+      if (editAllowForm.Remark !== "") payload.Remark = editAllowForm.Remark;
+      if (editAllowForm.Start_Date !== "")
+        payload.Start_Date = editAllowForm.Start_Date;
+      if (editAllowForm.End_Date !== "")
+        payload.End_Date = editAllowForm.End_Date;
+      payload.Is_Active = parseInt(editAllowForm.Is_Active);
+
+      await allowanceApi.update(selected.FE_ID, payload);
+      toast.success("Allowance updated");
+      setModal(null);
+      setSelected(null);
+      load();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.Message || "Error");
+    }
+    setSaving(false);
+  };
+
+  const openEditAllowance = (a: any) => {
+    setSelected(a);
+    setEditAllowForm({
+      Method_ID: a.Method_ID ? String(a.Method_ID) : "",
+      Value: String(a.Value),
+      Remark: a.Remark || "",
+      Start_Date: a.Start_Date ? a.Start_Date.substring(0, 10) : "",
+      End_Date: a.End_Date ? a.End_Date.substring(0, 10) : "",
+      Is_Active: String(a.Is_Active),
+    });
+    setModal("editAllowance");
+  };
+
   const deleteAllowance = async (id: number) => {
     if (!confirm("Deactivate this allowance?")) return;
     try {
@@ -205,6 +252,7 @@ export default function AllowancesPage() {
           </div>
         </div>
 
+        {/* ── Allowance Types Tab ── */}
         <TabsContent value="types">
           <Card className="border-slate-200 shadow-none">
             <CardHeader className="pb-0">
@@ -284,6 +332,7 @@ export default function AllowancesPage() {
           </Card>
         </TabsContent>
 
+        {/* ── Employee Allowances Tab ── */}
         <TabsContent value="employee">
           <Card className="border-slate-200 shadow-none">
             <CardHeader className="pb-0">
@@ -345,7 +394,15 @@ export default function AllowancesPage() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <div className="flex justify-end">
+                      {/* Edit + Delete buttons */}
+                      <div className="flex justify-end gap-1.5">
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => openEditAllowance(a)}
+                        >
+                          <Edit className="w-3.5 h-3.5" />
+                        </Button>
                         <Button
                           variant="destructive"
                           size="icon-sm"
@@ -373,7 +430,7 @@ export default function AllowancesPage() {
         </TabsContent>
       </Tabs>
 
-      {/* Type Dialog */}
+      {/* ── Allowance Type Dialog (Create / Edit) ── */}
       <Dialog
         open={modal === "type" || modal === "editType"}
         onOpenChange={(o) => !o && setModal(null)}
@@ -437,7 +494,7 @@ export default function AllowancesPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Allowance Dialog */}
+      {/* ── Add Allowance Dialog ── */}
       <Dialog
         open={modal === "allowance"}
         onOpenChange={(o) => !o && setModal(null)}
@@ -557,6 +614,144 @@ export default function AllowancesPage() {
             </Button>
             <Button onClick={saveAllowance} disabled={saving}>
               {saving ? "Saving..." : "Add Allowance"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Edit Allowance Dialog ── */}
+      <Dialog
+        open={modal === "editAllowance"}
+        onOpenChange={(o) => {
+          if (!o) {
+            setModal(null);
+            setSelected(null);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Allowance</DialogTitle>
+            <DialogDescription>
+              {selected && (
+                <span>
+                  Updating allowance for{" "}
+                  <span className="font-semibold text-slate-700">
+                    {selected.EmployeeName}
+                  </span>{" "}
+                  — {selected.AllowanceTypeName}
+                </span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-2 gap-3">
+            {/* Payment Method */}
+            <div className="col-span-2 space-y-1.5">
+              <Label>Payment Method</Label>
+              <Select
+                value={editAllowForm.Method_ID}
+                onValueChange={(v) =>
+                  setEditAllowForm((p) => ({ ...p, Method_ID: v }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="None" />
+                </SelectTrigger>
+                <SelectContent>
+                  {paymentMethods.map((m) => (
+                    <SelectItem key={m.Method_ID} value={String(m.Method_ID)}>
+                      {m.Method_Name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Value */}
+            <div className="space-y-1.5">
+              <Label>Value (LKR)</Label>
+              <Input
+                type="number"
+                placeholder="0.00"
+                value={editAllowForm.Value}
+                onChange={(e) =>
+                  setEditAllowForm((p) => ({ ...p, Value: e.target.value }))
+                }
+              />
+            </div>
+
+            {/* Status */}
+            <div className="space-y-1.5">
+              <Label>Status</Label>
+              <Select
+                value={editAllowForm.Is_Active}
+                onValueChange={(v) =>
+                  setEditAllowForm((p) => ({ ...p, Is_Active: v }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">Active</SelectItem>
+                  <SelectItem value="0">Inactive</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Start Date */}
+            <div className="space-y-1.5">
+              <Label>Start Date</Label>
+              <Input
+                type="date"
+                value={editAllowForm.Start_Date}
+                onChange={(e) =>
+                  setEditAllowForm((p) => ({
+                    ...p,
+                    Start_Date: e.target.value,
+                  }))
+                }
+              />
+            </div>
+
+            {/* End Date */}
+            <div className="space-y-1.5">
+              <Label>End Date</Label>
+              <Input
+                type="date"
+                value={editAllowForm.End_Date}
+                onChange={(e) =>
+                  setEditAllowForm((p) => ({ ...p, End_Date: e.target.value }))
+                }
+              />
+            </div>
+
+            {/* Remark */}
+            <div className="col-span-2 space-y-1.5">
+              <Label>Remark</Label>
+              <Input
+                placeholder="Optional remark..."
+                value={editAllowForm.Remark}
+                onChange={(e) =>
+                  setEditAllowForm((p) => ({ ...p, Remark: e.target.value }))
+                }
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setModal(null);
+                setSelected(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button onClick={updateAllowance} disabled={saving}>
+              {saving ? "Saving..." : "Save Changes"}
             </Button>
           </DialogFooter>
         </DialogContent>

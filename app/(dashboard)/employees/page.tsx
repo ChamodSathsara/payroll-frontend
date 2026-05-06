@@ -59,6 +59,12 @@ import {
 import { fmt } from "@/lib/utils";
 import * as XLSX from "xlsx";
 
+// ── Static company list ──────────────────────────────────────────────────────
+const COMPANIES = [
+  { CompanyID: 1, CompanyName: "Gestetner of Ceylon PLC" },
+  { CompanyID: 2, CompanyName: "Fintek Managed Solutions (Pvt) Ltd" },
+];
+
 interface ImportRow {
   row: number;
   EPF_No: string;
@@ -73,6 +79,7 @@ interface ImportRow {
   ContactNo?: string;
   Department?: string;
   Designation?: string;
+  CompanyID?: number;
   BasicSalary: number;
   EPF_Eligible: number;
   BankAccount_No?: string;
@@ -93,6 +100,7 @@ const EMPTY_FORM = {
   NIC: "",
   Designation_ID: "",
   Department_ID: "",
+  CompanyID: "",
   BasicSalary: "",
   EPF_Eligible: "1",
   DateOfBirth: "",
@@ -129,6 +137,13 @@ function parseBool(val: any): number {
   return /^yes$/i.test(String(val).trim()) ? 1 : 0;
 }
 
+function parseCompanyID(val: any): number | undefined {
+  if (val === undefined || val === null || val === "") return undefined;
+  const num = parseInt(String(val).trim(), 10);
+  if (isNaN(num)) return undefined;
+  return COMPANIES.some((c) => c.CompanyID === num) ? num : undefined;
+}
+
 function mapRow(raw: Record<string, any>, rowNum: number): ImportRow {
   const epf = String(raw["EPF No *"] ?? raw["EPF No"] ?? "").trim();
   const first = String(raw["First Name *"] ?? raw["First Name"] ?? "").trim();
@@ -142,6 +157,7 @@ function mapRow(raw: Record<string, any>, rowNum: number): ImportRow {
       ),
     ) || 0;
   const epfElig = parseBool(raw["EPF Eligible *"] ?? raw["EPF Eligible"]);
+  const companyID = parseCompanyID(raw["Company ID"] ?? raw["CompanyID"]);
   const errors: string[] = [];
   if (!epf) errors.push("EPF No is required");
   if (!first) errors.push("First Name is required");
@@ -163,6 +179,7 @@ function mapRow(raw: Record<string, any>, rowNum: number): ImportRow {
     ContactNo: String(raw["Contact No"] ?? "").trim() || undefined,
     Department: String(raw["Department"] ?? "").trim() || undefined,
     Designation: String(raw["Designation"] ?? "").trim() || undefined,
+    CompanyID: companyID,
     BasicSalary: salary,
     EPF_Eligible: epfElig,
     BankAccount_No: String(raw["Bank Account No"] ?? "").trim() || undefined,
@@ -244,11 +261,13 @@ export default function EmployeesPage() {
     setSelected(null);
     setModalType("create");
   };
+
   const openEdit = (emp: any) => {
     setForm({
       ...emp,
       Designation_ID: String(emp.Designation_ID || ""),
       Department_ID: String(emp.Department_ID || ""),
+      CompanyID: String(emp.CompanyID || ""),
       EPF_Eligible: String(emp.EPF_Eligible ?? 1),
     });
     setSelected(emp);
@@ -266,6 +285,7 @@ export default function EmployeesPage() {
           ? parseInt(form.Designation_ID)
           : null,
         Department_ID: form.Department_ID ? parseInt(form.Department_ID) : null,
+        CompanyID: form.CompanyID ? parseInt(form.CompanyID) : null,
       };
       if (!payload.BankDetail?.BankAccount_No) delete payload.BankDetail;
       if (modalType === "create") {
@@ -407,26 +427,26 @@ export default function EmployeesPage() {
     const uniqueDepts = new Set(
       valid
         .map((r) => r.Department?.toLowerCase().trim())
-        .filter((d) => d && d.length > 0)
+        .filter((d) => d && d.length > 0),
     );
     const uniqueDesigs = new Set(
       valid
         .map((r) => r.Designation?.toLowerCase().trim())
-        .filter((d) => d && d.length > 0)
+        .filter((d) => d && d.length > 0),
     );
 
     const existingDepts = new Set(
-      departments.map((d) => d.Department_Name.toLowerCase())
+      departments.map((d) => d.Department_Name.toLowerCase()),
     );
     const existingDesigs = new Set(
-      designations.map((d) => d.Designation_Name.toLowerCase())
+      designations.map((d) => d.Designation_Name.toLowerCase()),
     );
 
     const missingDepts = Array.from(uniqueDepts).filter(
-      (d) => !existingDepts.has(d)
+      (d) => !existingDepts.has(d),
     );
     const missingDesigs = Array.from(uniqueDesigs).filter(
-      (d) => !existingDesigs.has(d)
+      (d) => !existingDesigs.has(d),
     );
 
     return {
@@ -438,30 +458,23 @@ export default function EmployeesPage() {
   const createMissingEntities = async () => {
     setCreatingMissing(true);
     try {
-      // Create missing departments
       for (const deptName of missingEntities.departments) {
         await departmentApi.create({
           Department_Name: deptName.charAt(0).toUpperCase() + deptName.slice(1),
         });
       }
-
-      // Create missing designations
       for (const desigName of missingEntities.designations) {
         await departmentApi.createDesignation({
           Designation_Name:
             desigName.charAt(0).toUpperCase() + desigName.slice(1),
         });
       }
-
-      // Reload departments and designations
       await load();
       toast.success(
-        `Created ${missingEntities.departments.length} department(s) and ${missingEntities.designations.length} designation(s)`
+        `Created ${missingEntities.departments.length} department(s) and ${missingEntities.designations.length} designation(s)`,
       );
       setShowMissingDialog(false);
       setMissingEntities({ departments: [], designations: [] });
-
-      // Now proceed with import
       await runImport();
     } catch (e: any) {
       toast.error(e?.response?.data?.Message || "Error creating entities");
@@ -471,11 +484,8 @@ export default function EmployeesPage() {
   };
 
   const handleProceedToImport = () => {
-    const missing:any = checkMissingEntities();
-    if (
-      missing.departments.length > 0 ||
-      missing.designations.length > 0
-    ) {
+    const missing: any = checkMissingEntities();
+    if (missing.departments.length > 0 || missing.designations.length > 0) {
       setMissingEntities(missing);
       setShowMissingDialog(true);
     } else {
@@ -514,6 +524,7 @@ export default function EmployeesPage() {
           ContactNo: row.ContactNo || null,
           Department_ID: dept?.Department_ID || null,
           Designation_ID: desig?.Designation_ID || null,
+          CompanyID: row.CompanyID || null,
           BasicSalary: row.BasicSalary,
           EPF_Eligible: row.EPF_Eligible,
           Created_by: 1,
@@ -629,6 +640,7 @@ export default function EmployeesPage() {
                 <TableHead>EPF No</TableHead>
                 <TableHead>Department</TableHead>
                 <TableHead>Designation</TableHead>
+                <TableHead>Company</TableHead>
                 <TableHead>Basic Salary</TableHead>
                 <TableHead>EPF</TableHead>
                 <TableHead>Status</TableHead>
@@ -665,6 +677,12 @@ export default function EmployeesPage() {
                   </TableCell>
                   <TableCell className="text-sm text-slate-600">
                     {emp.DesignationName || "—"}
+                  </TableCell>
+                  <TableCell className="text-sm text-slate-600">
+                    {emp.CompanyName ||
+                      COMPANIES.find((c) => c.CompanyID === emp.CompanyID)
+                        ?.CompanyName ||
+                      "—"}
                   </TableCell>
                   <TableCell className="text-sm font-semibold text-slate-800">
                     {fmt(emp.BasicSalary)}
@@ -714,7 +732,7 @@ export default function EmployeesPage() {
               {employees.length === 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={8}
+                    colSpan={9}
                     className="text-center py-12 text-slate-400"
                   >
                     No employees found
@@ -768,8 +786,7 @@ export default function EmployeesPage() {
                 <div className="flex items-center gap-2">
                   <Briefcase className="w-4 h-4 text-purple-500" />
                   <p className="text-sm font-semibold text-slate-700">
-                    Missing Designations ({missingEntities.designations.length}
-                    )
+                    Missing Designations ({missingEntities.designations.length})
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -925,7 +942,7 @@ export default function EmployeesPage() {
                   "Use the official PayrollPro template for best results",
                   "Date format must be YYYY-MM-DD (e.g. 1990-05-22)",
                   "Missing departments & designations will be created automatically",
-                  'EPF Eligible column must be "Yes" or "No"',
+                  'EPF Eligible column must be "Yes" or "No". Company ID must be 1 or 2.',
                 ].map((tip, i) => (
                   <div
                     key={i}
@@ -934,6 +951,20 @@ export default function EmployeesPage() {
                     <span className="text-emerald-500 font-bold mt-0.5">✓</span>
                     {tip}
                   </div>
+                ))}
+              </div>
+              {/* Company reference */}
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-600 space-y-1">
+                <p className="font-semibold text-slate-700">
+                  Company ID Reference (use in "Company ID" column):
+                </p>
+                {COMPANIES.map((c) => (
+                  <p key={c.CompanyID}>
+                    <span className="font-mono font-bold text-slate-800">
+                      {c.CompanyID}
+                    </span>{" "}
+                    — {c.CompanyName}
+                  </p>
                 ))}
               </div>
             </div>
@@ -970,6 +1001,7 @@ export default function EmployeesPage() {
                       <TableHead>Full Name</TableHead>
                       <TableHead>Department</TableHead>
                       <TableHead>Designation</TableHead>
+                      <TableHead>Company</TableHead>
                       <TableHead>Basic Salary</TableHead>
                       <TableHead>EPF</TableHead>
                       <TableHead className="w-24">Status</TableHead>
@@ -997,6 +1029,13 @@ export default function EmployeesPage() {
                         </TableCell>
                         <TableCell className="text-sm text-slate-500">
                           {row.Designation || "—"}
+                        </TableCell>
+                        <TableCell className="text-sm text-slate-500">
+                          {row.CompanyID
+                            ? (COMPANIES.find(
+                                (c) => c.CompanyID === row.CompanyID,
+                              )?.CompanyName ?? `ID: ${row.CompanyID}`)
+                            : "—"}
                         </TableCell>
                         <TableCell className="text-sm font-semibold">
                           {row.BasicSalary > 0
@@ -1129,7 +1168,6 @@ export default function EmployeesPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Rest of the dialogs remain the same... */}
       {/* ═══ DEPARTMENTS & DESIGNATIONS DIALOG ═══ */}
       <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
         <DialogContent className="max-w-2xl">
@@ -1397,6 +1435,8 @@ export default function EmployeesPage() {
                 <TabsTrigger value="bank">Bank Details</TabsTrigger>
               )}
             </TabsList>
+
+            {/* ── Personal Info ── */}
             <TabsContent value="personal" className="space-y-3 mt-4">
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
@@ -1466,8 +1506,34 @@ export default function EmployeesPage() {
                 </div>
               </div>
             </TabsContent>
+
+            {/* ── Job Details ── */}
             <TabsContent value="job" className="space-y-3 mt-4">
               <div className="grid grid-cols-2 gap-3">
+                {/* Company */}
+                <div className="col-span-2 space-y-1.5">
+                  <Label>Company</Label>
+                  <Select
+                    value={String(form.CompanyID || "")}
+                    onValueChange={(v) => f("CompanyID", v)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select company" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {COMPANIES.map((c) => (
+                        <SelectItem
+                          key={c.CompanyID}
+                          value={String(c.CompanyID)}
+                        >
+                          {c.CompanyName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Department */}
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
                     <Label>Department</Label>
@@ -1502,6 +1568,8 @@ export default function EmployeesPage() {
                     </SelectContent>
                   </Select>
                 </div>
+
+                {/* Designation */}
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
                     <Label>Designation</Label>
@@ -1536,6 +1604,7 @@ export default function EmployeesPage() {
                     </SelectContent>
                   </Select>
                 </div>
+
                 <div className="space-y-1.5">
                   <Label>Basic Salary (LKR)</Label>
                   <Input
@@ -1570,6 +1639,8 @@ export default function EmployeesPage() {
                 </div>
               </div>
             </TabsContent>
+
+            {/* ── Bank Details ── */}
             {modalType === "create" && (
               <TabsContent value="bank" className="space-y-3 mt-4">
                 <p className="text-xs text-slate-500">
@@ -1692,6 +1763,13 @@ export default function EmployeesPage() {
                   ["EPF Number", selected.EPF_No],
                   ["NIC", selected.NIC || "—"],
                   ["Contact", selected.ContactNo || "—"],
+                  [
+                    "Company",
+                    selected.CompanyName ||
+                      COMPANIES.find((c) => c.CompanyID === selected.CompanyID)
+                        ?.CompanyName ||
+                      "—",
+                  ],
                   ["Basic Salary", fmt(selected.BasicSalary)],
                   ["EPF Eligible", selected.EPF_Eligible ? "Yes" : "No"],
                   [
