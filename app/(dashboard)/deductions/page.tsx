@@ -389,6 +389,7 @@ export default function DeductionsPage() {
                   <TableHead>Category</TableHead>
                   <TableHead>Period</TableHead>
                   <TableHead>Value (LKR)</TableHead>
+                  <TableHead>Payment Method</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -435,6 +436,9 @@ export default function DeductionsPage() {
                         })}
                       </span>
                     </TableCell>
+                    <TableCell className="text-sm text-slate-500">
+                      {d.PaymentMethodName || "—"}
+                    </TableCell>
                     <TableCell>
                       <Badge variant={d.Is_Active ? "success" : "destructive"}>
                         {d.Is_Active ? "Active" : "Inactive"}
@@ -477,7 +481,7 @@ export default function DeductionsPage() {
                 {deductions.length === 0 && (
                   <TableRow>
                     <TableCell
-                      colSpan={7}
+                      colSpan={8}
                       className="text-center py-12 text-slate-400"
                     >
                       No employee deductions
@@ -721,6 +725,28 @@ export default function DeductionsPage() {
               )}
             </div>
 
+            {/* Payment Method — full width */}
+            <div className="col-span-2 space-y-1.5">
+              <Label>Payment Method</Label>
+              <Select
+                value={dedForm.Method_ID}
+                onValueChange={(v) =>
+                  setDedForm((p) => ({ ...p, Method_ID: v }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="None" />
+                </SelectTrigger>
+                <SelectContent>
+                  {paymentMethods.map((m) => (
+                    <SelectItem key={m.Method_ID} value={String(m.Method_ID)}>
+                      {m.Method_Name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             {/* Value */}
             <div
               className={
@@ -830,6 +856,28 @@ export default function DeductionsPage() {
                 <SelectContent>
                   <SelectItem value="1">Active</SelectItem>
                   <SelectItem value="0">Inactive</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Payment Method — full width */}
+            <div className="col-span-2 space-y-1.5">
+              <Label>Payment Method</Label>
+              <Select
+                value={editDedForm.Method_ID}
+                onValueChange={(v) =>
+                  setEditDedForm((p) => ({ ...p, Method_ID: v }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="None" />
+                </SelectTrigger>
+                <SelectContent>
+                  {paymentMethods.map((m) => (
+                    <SelectItem key={m.Method_ID} value={String(m.Method_ID)}>
+                      {m.Method_Name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
