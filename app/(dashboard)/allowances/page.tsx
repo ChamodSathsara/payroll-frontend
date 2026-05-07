@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { allowanceApi, employeeApi } from "@/lib/api";
+import { allowanceApi, employeeApi, periodApi } from "@/lib/api";
 import toast from "react-hot-toast";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -40,11 +40,18 @@ export default function AllowancesPage() {
   const [allowances, setAllowances] = useState<any[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
+  const [periods, setPeriods] = useState<any[]>([]); // ✅ ADD THIS
+  const [editAllowanceCategory, setEditAllowanceCategory] =
+    useState<string>("");
   const [modal, setModal] = useState<
     "type" | "editType" | "allowance" | "editAllowance" | null
   >(null);
   const [selected, setSelected] = useState<any>(null);
   const [saving, setSaving] = useState(false);
+
+  // ✅ ADD THIS - Track selected allowance type category
+  const [selectedAllowanceCategory, setSelectedAllowanceCategory] =
+    useState<string>("");
 
   const [typeForm, setTypeForm] = useState({
     Type_Name: "",
@@ -57,9 +64,8 @@ export default function AllowancesPage() {
     EmployeeID: "",
     AllowanceType_ID: "",
     Method_ID: "",
+    Period_ID: "", // ✅ ADD THIS
     Value: "",
-    Start_Date: "",
-    End_Date: "",
     Is_Active: 1,
     Created_by: 1,
   });
@@ -67,6 +73,7 @@ export default function AllowancesPage() {
   // Update form mirrors AllowanceUpdateDto
   const [editAllowForm, setEditAllowForm] = useState({
     Method_ID: "",
+    Period_ID: "", // ✅ ADD THIS
     Value: "",
     Remark: "",
     Start_Date: "",
@@ -76,16 +83,18 @@ export default function AllowancesPage() {
 
   const load = async () => {
     try {
-      const [tr, ar, er, mr] = await Promise.all([
+      const [tr, ar, er, mr, pr] = await Promise.all([
         allowanceApi.getTypes(),
         allowanceApi.getAll(),
         employeeApi.getAll(),
         allowanceApi.getPaymentMethods(),
+        periodApi.getAll(), // ✅ ADD THIS
       ]);
       setTypes(tr.data?.Data || []);
       setAllowances(ar.data?.Data || []);
       setEmployees(er.data?.Data || []);
       setPaymentMethods(mr.data?.Data || []);
+      setPeriods(pr.data?.Data || []); // ✅ ADD THIS
     } catch {
       toast.error("Failed to load allowances");
     }
@@ -128,13 +137,21 @@ export default function AllowancesPage() {
   const saveAllowance = async () => {
     setSaving(true);
     try {
-      await allowanceApi.create({
-        ...allowForm,
+      const payload: any = {
         EmployeeID: parseInt(allowForm.EmployeeID),
         AllowanceType_ID: parseInt(allowForm.AllowanceType_ID),
         Method_ID: allowForm.Method_ID ? parseInt(allowForm.Method_ID) : null,
         Value: parseFloat(allowForm.Value),
-      });
+        Is_Active: allowForm.Is_Active,
+        Created_by: allowForm.Created_by,
+      };
+
+      // ✅ Only include Period_ID if category is VARIABLE
+      if (selectedAllowanceCategory === "VARIABLE" && allowForm.Period_ID) {
+        payload.Period_ID = parseInt(allowForm.Period_ID);
+      }
+
+      await allowanceApi.create(payload);
       toast.success("Allowance added");
       setModal(null);
       load();
@@ -152,6 +169,14 @@ export default function AllowancesPage() {
       const payload: Record<string, any> = {};
       if (editAllowForm.Method_ID !== "")
         payload.Method_ID = parseInt(editAllowForm.Method_ID);
+
+      // ✅ UPDATE THIS - Only include Period_ID if category is VARIABLE
+      if (
+        editAllowanceCategory === "VARIABLE" &&
+        editAllowForm.Period_ID !== ""
+      )
+        payload.Period_ID = parseInt(editAllowForm.Period_ID);
+
       if (editAllowForm.Value !== "")
         payload.Value = parseFloat(editAllowForm.Value);
       if (editAllowForm.Remark !== "") payload.Remark = editAllowForm.Remark;
@@ -174,8 +199,10 @@ export default function AllowancesPage() {
 
   const openEditAllowance = (a: any) => {
     setSelected(a);
+    setEditAllowanceCategory(a.Category); // ✅ ADD THIS - Set the category when opening edit dialog
     setEditAllowForm({
       Method_ID: a.Method_ID ? String(a.Method_ID) : "",
+      Period_ID: a.Period_ID ? String(a.Period_ID) : "",
       Value: String(a.Value),
       Remark: a.Remark || "",
       Start_Date: a.Start_Date ? a.Start_Date.substring(0, 10) : "",
@@ -193,6 +220,19 @@ export default function AllowancesPage() {
       load();
     } catch {
       toast.error("Failed");
+    }
+  };
+
+  // ✅ ADD THIS - Handler for when allowance type changes
+  const handleAllowanceTypeChange = (typeId: string) => {
+    setAllowForm((p) => ({ ...p, AllowanceType_ID: typeId, Period_ID: "" }));
+
+    // Find the selected type and set its category
+    const selectedType = types.find(
+      (t) => t.AllowanceType_ID === parseInt(typeId),
+    );
+    if (selectedType) {
+      setSelectedAllowanceCategory(selectedType.Category);
     }
   };
 
@@ -238,12 +278,12 @@ export default function AllowancesPage() {
                   EmployeeID: "",
                   AllowanceType_ID: "",
                   Method_ID: "",
+                  Period_ID: "",
                   Value: "",
-                  Start_Date: "",
-                  End_Date: "",
                   Is_Active: 1,
                   Created_by: 1,
                 });
+                setSelectedAllowanceCategory(""); // ✅ Reset category
                 setModal("allowance");
               }}
             >
@@ -345,6 +385,7 @@ export default function AllowancesPage() {
                   <TableHead>Employee</TableHead>
                   <TableHead>Allowance Type</TableHead>
                   <TableHead>Category</TableHead>
+                  <TableHead>Period</TableHead> {/* ✅ ADD THIS COLUMN */}
                   <TableHead>Value (LKR)</TableHead>
                   <TableHead>Payment Method</TableHead>
                   <TableHead>Status</TableHead>
@@ -377,6 +418,10 @@ export default function AllowancesPage() {
                         {a.Category}
                       </Badge>
                     </TableCell>
+                    {/* ✅ ADD THIS CELL */}
+                    <TableCell className="text-sm text-slate-500">
+                      {a.PeriodName || "—"}
+                    </TableCell>
                     <TableCell>
                       <span className="text-sm font-bold text-emerald-600">
                         +{" "}
@@ -394,7 +439,6 @@ export default function AllowancesPage() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      {/* Edit + Delete buttons */}
                       <div className="flex justify-end gap-1.5">
                         <Button
                           variant="ghost"
@@ -417,7 +461,7 @@ export default function AllowancesPage() {
                 {allowances.length === 0 && (
                   <TableRow>
                     <TableCell
-                      colSpan={7}
+                      colSpan={8} // ✅ UPDATE COLSPAN
                       className="text-center py-12 text-slate-400"
                     >
                       No employee allowances configured
@@ -507,6 +551,7 @@ export default function AllowancesPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-3">
+            {/* Employee */}
             <div className="col-span-2 space-y-1.5">
               <Label>Employee</Label>
               <Select
@@ -531,13 +576,13 @@ export default function AllowancesPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1.5">
+
+            {/* Allowance Type */}
+            <div className="col-span-2 space-y-1.5">
               <Label>Allowance Type</Label>
               <Select
                 value={allowForm.AllowanceType_ID}
-                onValueChange={(v) =>
-                  setAllowForm((p) => ({ ...p, AllowanceType_ID: v }))
-                }
+                onValueChange={handleAllowanceTypeChange} // ✅ USE NEW HANDLER
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select type..." />
@@ -556,6 +601,37 @@ export default function AllowancesPage() {
                 </SelectContent>
               </Select>
             </div>
+
+            {/* ✅ CONDITIONAL PAYROLL PERIOD - ONLY SHOW IF CATEGORY IS VARIABLE */}
+            {selectedAllowanceCategory === "VARIABLE" && (
+              <div className="col-span-2 space-y-1.5">
+                <Label>
+                  Payroll Period <span className="text-red-500">*</span>
+                </Label>
+                <Select
+                  value={allowForm.Period_ID}
+                  onValueChange={(v) =>
+                    setAllowForm((p) => ({ ...p, Period_ID: v }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select period..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {periods.map((period) => (
+                      <SelectItem
+                        key={period.Period_ID}
+                        value={String(period.Period_ID)}
+                      >
+                        {period.Period_Name} ({period.Period_Year})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* Payment Method */}
             <div className="space-y-1.5">
               <Label>Payment Method</Label>
               <Select
@@ -576,6 +652,8 @@ export default function AllowancesPage() {
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Value */}
             <div className="space-y-1.5">
               <Label>Value (LKR)</Label>
               <Input
@@ -584,26 +662,6 @@ export default function AllowancesPage() {
                 value={allowForm.Value}
                 onChange={(e) =>
                   setAllowForm((p) => ({ ...p, Value: e.target.value }))
-                }
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Start Date</Label>
-              <Input
-                type="date"
-                value={allowForm.Start_Date}
-                onChange={(e) =>
-                  setAllowForm((p) => ({ ...p, Start_Date: e.target.value }))
-                }
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>End Date</Label>
-              <Input
-                type="date"
-                value={allowForm.End_Date}
-                onChange={(e) =>
-                  setAllowForm((p) => ({ ...p, End_Date: e.target.value }))
                 }
               />
             </div>
@@ -626,6 +684,7 @@ export default function AllowancesPage() {
           if (!o) {
             setModal(null);
             setSelected(null);
+            setEditAllowanceCategory(""); // ✅ ADD THIS - Reset category
           }
         }}
       >
@@ -640,12 +699,48 @@ export default function AllowancesPage() {
                     {selected.EmployeeName}
                   </span>{" "}
                   — {selected.AllowanceTypeName}
+                  {/* ✅ ADD THIS - Show category badge */}
+                  <Badge
+                    variant={catVariant(editAllowanceCategory)}
+                    className="ml-2"
+                  >
+                    {editAllowanceCategory}
+                  </Badge>
                 </span>
               )}
             </DialogDescription>
           </DialogHeader>
 
           <div className="grid grid-cols-2 gap-3">
+            {/* ✅ UPDATED - CONDITIONAL PAYROLL PERIOD - ONLY SHOW IF CATEGORY IS VARIABLE */}
+            {editAllowanceCategory === "VARIABLE" && (
+              <div className="col-span-2 space-y-1.5">
+                <Label>
+                  Payroll Period <span className="text-red-500">*</span>
+                </Label>
+                <Select
+                  value={editAllowForm.Period_ID}
+                  onValueChange={(v) =>
+                    setEditAllowForm((p) => ({ ...p, Period_ID: v }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select period..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {periods.map((period) => (
+                      <SelectItem
+                        key={period.Period_ID}
+                        value={String(period.Period_ID)}
+                      >
+                        {period.Period_Name} ({period.Period_Year})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             {/* Payment Method */}
             <div className="col-span-2 space-y-1.5">
               <Label>Payment Method</Label>
@@ -746,6 +841,7 @@ export default function AllowancesPage() {
               onClick={() => {
                 setModal(null);
                 setSelected(null);
+                setEditAllowanceCategory(""); // ✅ ADD THIS - Reset category
               }}
             >
               Cancel

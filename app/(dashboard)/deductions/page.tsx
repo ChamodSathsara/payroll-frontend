@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { deductionApi, allowanceApi, employeeApi } from "@/lib/api";
+import { deductionApi, allowanceApi, employeeApi, periodApi } from "@/lib/api";
 import toast from "react-hot-toast";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -42,27 +42,41 @@ export default function DeductionsPage() {
   const [advances, setAdvances] = useState<any[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
+  const [periods, setPeriods] = useState<any[]>([]);
+
   const [modal, setModal] = useState<
     "type" | "editType" | "deduction" | "advance" | null
   >(null);
+  const [editDedModal, setEditDedModal] = useState(false);
+  const [selectedDed, setSelectedDed] = useState<any>(null);
+
   const [selected, setSelected] = useState<any>(null);
   const [saving, setSaving] = useState(false);
+
   const [typeForm, setTypeForm] = useState({
     Type_Name: "",
     Category: "FIXED",
     Description: "",
     Is_Active: "1",
   });
+
   const [dedForm, setDedForm] = useState({
     EmployeeID: "",
     DeductionType_ID: "",
     Method_ID: "",
     Value: "",
-    Start_Date: "",
-    End_Date: "",
+    Period_ID: "",
     Is_Active: 1,
     Created_by: 1,
   });
+
+  const [editDedForm, setEditDedForm] = useState({
+    Method_ID: "",
+    Value: "",
+    Period_ID: "",
+    Is_Active: "1",
+  });
+
   const [advForm, setAdvForm] = useState({
     EmployeeID: "",
     Amount: "",
@@ -71,20 +85,32 @@ export default function DeductionsPage() {
     Created_by: 1,
   });
 
+  // ── Derive selected type from dedForm.DeductionType_ID ──────────────────
+  const selectedAddType = types.find(
+    (t) => String(t.DeductionType_ID) === dedForm.DeductionType_ID,
+  );
+  const addTypeIsVariable = selectedAddType?.Category === "VARIABLE";
+
+  // ── Derive category from selectedDed (edit dialog) ───────────────────────
+  const editTypeIsVariable = selectedDed?.Category === "VARIABLE";
+
+  // ────────────────────────────────────────────────────────────────────────
   const load = async () => {
     try {
-      const [tr, dr, ar, er, mr] = await Promise.all([
+      const [tr, dr, ar, er, mr, pr] = await Promise.all([
         deductionApi.getTypes(),
         deductionApi.getAll(),
         deductionApi.getAdvances(),
         employeeApi.getAll(),
         allowanceApi.getPaymentMethods(),
+        periodApi.getAll(),
       ]);
       setTypes(tr.data?.Data || []);
       setDeductions(dr.data?.Data || []);
       setAdvances(ar.data?.Data || []);
       setEmployees(er.data?.Data || []);
       setPaymentMethods(mr.data?.Data || []);
+      setPeriods(pr.data?.Data || []);
     } catch {
       toast.error("Failed to load data");
     }
@@ -121,10 +147,41 @@ export default function DeductionsPage() {
         EmployeeID: parseInt(dedForm.EmployeeID),
         DeductionType_ID: parseInt(dedForm.DeductionType_ID),
         Method_ID: dedForm.Method_ID ? parseInt(dedForm.Method_ID) : null,
+        // Send Period_ID only when type is VARIABLE
+        Period_ID:
+          addTypeIsVariable && dedForm.Period_ID
+            ? parseInt(dedForm.Period_ID)
+            : null,
         Value: parseFloat(dedForm.Value),
       });
       toast.success("Deduction added");
       setModal(null);
+      load();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.Message || "Error");
+    }
+    setSaving(false);
+  };
+
+  const saveEditDed = async () => {
+    if (!selectedDed) return;
+    setSaving(true);
+    try {
+      await deductionApi.update(selectedDed.D_ID, {
+        Method_ID: editDedForm.Method_ID
+          ? parseInt(editDedForm.Method_ID)
+          : null,
+        Value: parseFloat(editDedForm.Value),
+        // Send Period_ID only when type is VARIABLE
+        Period_ID:
+          editTypeIsVariable && editDedForm.Period_ID
+            ? parseInt(editDedForm.Period_ID)
+            : null,
+        Is_Active: parseInt(editDedForm.Is_Active),
+      });
+      toast.success("Deduction updated");
+      setEditDedModal(false);
+      setSelectedDed(null);
       load();
     } catch (e: any) {
       toast.error(e?.response?.data?.Message || "Error");
@@ -206,8 +263,7 @@ export default function DeductionsPage() {
                   DeductionType_ID: "",
                   Method_ID: "",
                   Value: "",
-                  Start_Date: "",
-                  End_Date: "",
+                  Period_ID: "",
                   Is_Active: 1,
                   Created_by: 1,
                 });
@@ -233,6 +289,7 @@ export default function DeductionsPage() {
           </div>
         </div>
 
+        {/* ── TYPES TAB ── */}
         <TabsContent value="types">
           <Card className="border-slate-200 shadow-none">
             <CardHeader className="pb-0">
@@ -317,6 +374,7 @@ export default function DeductionsPage() {
           </Card>
         </TabsContent>
 
+        {/* ── DEDUCTIONS TAB ── */}
         <TabsContent value="deductions">
           <Card className="border-slate-200 shadow-none">
             <CardHeader className="pb-0">
@@ -329,6 +387,7 @@ export default function DeductionsPage() {
                   <TableHead>Employee</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Category</TableHead>
+                  <TableHead>Period</TableHead>
                   <TableHead>Value (LKR)</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -360,6 +419,14 @@ export default function DeductionsPage() {
                         {d.Category}
                       </Badge>
                     </TableCell>
+                    {/* Period only meaningful for VARIABLE */}
+                    <TableCell className="text-sm text-slate-500">
+                      {d.Category === "VARIABLE" ? (
+                        d.PeriodName || "—"
+                      ) : (
+                        <span className="text-slate-300">—</span>
+                      )}
+                    </TableCell>
                     <TableCell>
                       <span className="text-sm font-bold text-red-500">
                         -{" "}
@@ -374,7 +441,23 @@ export default function DeductionsPage() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <div className="flex justify-end">
+                      <div className="flex justify-end gap-1.5">
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => {
+                            setSelectedDed(d);
+                            setEditDedForm({
+                              Method_ID: d.Method_ID ? String(d.Method_ID) : "",
+                              Value: String(d.Value),
+                              Period_ID: d.Period_ID ? String(d.Period_ID) : "",
+                              Is_Active: String(d.Is_Active),
+                            });
+                            setEditDedModal(true);
+                          }}
+                        >
+                          <Edit className="w-3.5 h-3.5" />
+                        </Button>
                         <Button
                           variant="destructive"
                           size="icon-sm"
@@ -394,7 +477,7 @@ export default function DeductionsPage() {
                 {deductions.length === 0 && (
                   <TableRow>
                     <TableCell
-                      colSpan={6}
+                      colSpan={7}
                       className="text-center py-12 text-slate-400"
                     >
                       No employee deductions
@@ -406,6 +489,7 @@ export default function DeductionsPage() {
           </Card>
         </TabsContent>
 
+        {/* ── ADVANCES TAB ── */}
         <TabsContent value="advances">
           <Card className="border-slate-200 shadow-none">
             <CardHeader className="pb-0">
@@ -448,7 +532,9 @@ export default function DeductionsPage() {
                     </TableCell>
                     <TableCell>
                       <span
-                        className={`text-sm font-bold ${a.Balance > 0 ? "text-red-500" : "text-emerald-600"}`}
+                        className={`text-sm font-bold ${
+                          a.Balance > 0 ? "text-red-500" : "text-emerald-600"
+                        }`}
                       >
                         {fmt(a.Balance || 0)}
                       </span>
@@ -492,7 +578,7 @@ export default function DeductionsPage() {
         </TabsContent>
       </Tabs>
 
-      {/* Type Dialog */}
+      {/* ── TYPE DIALOG ── */}
       <Dialog
         open={modal === "type" || modal === "editType"}
         onOpenChange={(o) => !o && setModal(null)}
@@ -552,7 +638,7 @@ export default function DeductionsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Deduction Dialog */}
+      {/* ── ADD DEDUCTION DIALOG ── */}
       <Dialog
         open={modal === "deduction"}
         onOpenChange={(o) => !o && setModal(null)}
@@ -562,6 +648,7 @@ export default function DeductionsPage() {
             <DialogTitle>Add Employee Deduction</DialogTitle>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-3">
+            {/* Employee — full width */}
             <div className="col-span-2 space-y-1.5">
               <Label>Employee</Label>
               <Select
@@ -582,12 +669,18 @@ export default function DeductionsPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1.5">
+
+            {/* Deduction Type — full width, clears Period_ID on change */}
+            <div className="col-span-2 space-y-1.5">
               <Label>Deduction Type</Label>
               <Select
                 value={dedForm.DeductionType_ID}
                 onValueChange={(v) =>
-                  setDedForm((p) => ({ ...p, DeductionType_ID: v }))
+                  setDedForm((p) => ({
+                    ...p,
+                    DeductionType_ID: v,
+                    Period_ID: "", // clear when type changes
+                  }))
                 }
               >
                 <SelectTrigger>
@@ -601,13 +694,39 @@ export default function DeductionsPage() {
                         key={t.DeductionType_ID}
                         value={String(t.DeductionType_ID)}
                       >
-                        {t.Type_Name} ({t.Category})
+                        {t.Type_Name}&nbsp;
+                        <span className="text-xs text-slate-400">
+                          ({t.Category})
+                        </span>
                       </SelectItem>
                     ))}
                 </SelectContent>
               </Select>
+
+              {/* Category hint beneath the dropdown */}
+              {selectedAddType && (
+                <div className="flex items-center gap-2 pt-0.5">
+                  <Badge
+                    variant={catVariant(selectedAddType.Category)}
+                    className="text-xs"
+                  >
+                    {selectedAddType.Category}
+                  </Badge>
+                  <span className="text-xs text-slate-400">
+                    {addTypeIsVariable
+                      ? "Payroll period is required for this type"
+                      : "No payroll period needed"}
+                  </span>
+                </div>
+              )}
             </div>
-            <div className="space-y-1.5">
+
+            {/* Value */}
+            <div
+              className={
+                addTypeIsVariable ? "space-y-1.5" : "col-span-2 space-y-1.5"
+              }
+            >
               <Label>Value (LKR)</Label>
               <Input
                 type="number"
@@ -618,27 +737,32 @@ export default function DeductionsPage() {
                 }
               />
             </div>
-            <div className="space-y-1.5">
-              <Label>Start Date</Label>
-              <Input
-                type="date"
-                value={dedForm.Start_Date}
-                onChange={(e) =>
-                  setDedForm((p) => ({ ...p, Start_Date: e.target.value }))
-                }
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>End Date</Label>
-              <Input
-                type="date"
-                value={dedForm.End_Date}
-                onChange={(e) =>
-                  setDedForm((p) => ({ ...p, End_Date: e.target.value }))
-                }
-              />
-            </div>
+
+            {/* Payroll Period — only shown when VARIABLE */}
+            {addTypeIsVariable && (
+              <div className="space-y-1.5">
+                <Label>Payroll Period</Label>
+                <Select
+                  value={dedForm.Period_ID}
+                  onValueChange={(v) =>
+                    setDedForm((p) => ({ ...p, Period_ID: v }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select period..." />
+                  </SelectTrigger>
+                  <SelectContent position="popper" className="max-h-[300px]">
+                    {periods.map((p) => (
+                      <SelectItem key={p.Period_ID} value={String(p.Period_ID)}>
+                        {p.Period_Name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setModal(null)}>
               Cancel
@@ -650,7 +774,108 @@ export default function DeductionsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Advance Dialog */}
+      {/* ── EDIT DEDUCTION DIALOG ── */}
+      <Dialog
+        open={editDedModal}
+        onOpenChange={(o) => {
+          if (!o) {
+            setEditDedModal(false);
+            setSelectedDed(null);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Deduction</DialogTitle>
+            <DialogDescription className="flex items-center gap-2 pt-1">
+              <span>{selectedDed?.EmployeeName}</span>
+              <span className="text-slate-300">—</span>
+              <span>{selectedDed?.DeductionTypeName}</span>
+              {selectedDed?.Category && (
+                <Badge
+                  variant={catVariant(selectedDed.Category)}
+                  className="text-xs"
+                >
+                  {selectedDed.Category}
+                </Badge>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-3">
+            {/* Value */}
+            <div className="space-y-1.5">
+              <Label>Value (LKR)</Label>
+              <Input
+                type="number"
+                placeholder="0.00"
+                value={editDedForm.Value}
+                onChange={(e) =>
+                  setEditDedForm((p) => ({ ...p, Value: e.target.value }))
+                }
+              />
+            </div>
+
+            {/* Status */}
+            <div className="space-y-1.5">
+              <Label>Status</Label>
+              <Select
+                value={editDedForm.Is_Active}
+                onValueChange={(v) =>
+                  setEditDedForm((p) => ({ ...p, Is_Active: v }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">Active</SelectItem>
+                  <SelectItem value="0">Inactive</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Payroll Period — only shown when type is VARIABLE */}
+            {editTypeIsVariable && (
+              <div className="col-span-2 space-y-1.5">
+                <Label>Payroll Period</Label>
+                <Select
+                  value={editDedForm.Period_ID}
+                  onValueChange={(v) =>
+                    setEditDedForm((p) => ({ ...p, Period_ID: v }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select period..." />
+                  </SelectTrigger>
+                  <SelectContent position="popper" className="max-h-[300px]">
+                    {periods.map((p) => (
+                      <SelectItem key={p.Period_ID} value={String(p.Period_ID)}>
+                        {p.Period_Name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setEditDedModal(false);
+                setSelectedDed(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button onClick={saveEditDed} disabled={saving}>
+              {saving ? "Saving..." : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── ADVANCE DIALOG ── */}
       <Dialog
         open={modal === "advance"}
         onOpenChange={(o) => !o && setModal(null)}
